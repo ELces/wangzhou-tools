@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>到货核查 · 旺洲</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=DM+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg:      #0d0f14;
+  --surface: #161921;
+  --card:    #1c2030;
+  --border:  #252b3b;
+  --text:    #e2e5ee;
+  --muted:   #5c6478;
+  --accent:  #4f8ef7;
+  --green:   #22c55e;
+  --yellow:  #f59e0b;
+  --red:     #ef4444;
+  --over:    #a78bfa;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 14px; min-height: 100vh; }
+
+/* ── Header ── */
+header {
+  padding: 0 32px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  position: sticky; top: 0; z-index: 10;
+}
+.logo { font-size: 16px; font-weight: 600; letter-spacing: -0.2px; }
+.logo em { color: var(--accent); font-style: normal; }
+.sep { color: var(--border); font-size: 18px; }
+.page-title { font-size: 13px; color: var(--muted); }
+.header-right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+
+/* ── Main ── */
+.main { padding: 24px 32px; max-width: 1440px; margin: 0 auto; }
+
+/* ── Upload ── */
+.upload-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px; }
+.upload-card {
+  background: var(--card);
+  border: 1.5px dashed var(--border);
+  border-radius: 10px;
+  padding: 22px 20px 18px;
+  cursor: pointer;
+  transition: border-color .18s, background .18s;
+  position: relative;
+  min-height: 100px;
+}
+.upload-card:hover { border-color: var(--accent); background: #1a2035; }
+.upload-card.loaded { border-style: solid; border-color: #2d4a8a; background: #161d2e; }
+.upload-card input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+.uc-head { display: flex; align-items: center; gap: 9px; margin-bottom: 6px; }
+.uc-icon { font-size: 20px; line-height: 1; }
+.uc-label { font-weight: 600; font-size: 14px; }
+.uc-hint { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+.file-tags { display: flex; flex-wrap: wrap; gap: 6px; pointer-events: none; }
+.file-tag {
+  background: #1a2540;
+  border: 1px solid #2a3a60;
+  border-radius: 5px;
+  padding: 3px 10px 3px 8px;
+  font-size: 11.5px;
+  font-family: 'DM Mono', monospace;
+  color: var(--accent);
+  display: flex; align-items: center; gap: 5px;
+  pointer-events: all;
+}
+.file-tag button { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 0 0 2px; }
+.file-tag button:hover { color: var(--red); }
+
+/* ── Action row ── */
+.action-row { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+.btn {
+  border: none; border-radius: 7px; padding: 9px 24px;
+  font-size: 13.5px; font-weight: 600; font-family: 'DM Sans', sans-serif;
+  cursor: pointer; transition: opacity .15s, transform .1s;
+}
+.btn:active { transform: scale(.97); }
+.btn:disabled { opacity: .35; cursor: not-allowed; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover:not(:disabled) { opacity: .88; }
+.status-msg { color: var(--muted); font-size: 13px; }
+
+/* ── Summary ── */
+.summary-row { display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+.pill {
+  border-radius: 7px; padding: 7px 16px;
+  font-size: 12.5px; font-weight: 500;
+  display: flex; align-items: center; gap: 6px; cursor: pointer;
+  border: 1px solid transparent; transition: all .15s;
+}
+.pill:hover { opacity: .85; }
+.pill.active { border-color: currentColor !important; }
+.p-all  { background: #1e2438; color: var(--text);   border-color: var(--border); }
+.p-ok   { background: #122a1e; color: var(--green);  }
+.p-part { background: #2a2010; color: var(--yellow); }
+.p-no   { background: #2a1414; color: var(--red);    }
+.pill-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+
+/* ── Filter bar ── */
+.filter-bar { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
+.order-select, .search-box {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 6px; padding: 6px 12px;
+  font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--text);
+  outline: none; transition: border-color .15s;
+}
+.order-select { cursor: pointer; }
+.search-box { width: 200px; margin-left: auto; }
+.search-box:focus, .order-select:focus { border-color: var(--accent); }
+
+/* ── Table ── */
+.table-wrap { background: var(--card); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+table { width: 100%; border-collapse: collapse; }
+thead { background: var(--surface); position: sticky; top: 52px; z-index: 5; }
+th {
+  text-align: left; padding: 10px 14px;
+  font-size: 10.5px; font-weight: 600; letter-spacing: .07em;
+  color: var(--muted); text-transform: uppercase;
+  border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+td { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(79,142,247,.04); }
+.mono { font-family: 'DM Mono', monospace; }
+.muted { color: var(--muted); }
+.order-badge {
+  background: #1a2540; border: 1px solid #2a3a60; border-radius: 5px;
+  padding: 2px 8px; font-family: 'DM Mono', monospace; font-size: 12px; color: var(--accent);
+}
+.name-cell { max-width: 200px; }
+.name-main { font-weight: 500; }
+.name-note { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+.supplier-cell { max-width: 120px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.spec-cell { max-width: 140px; font-size: 12px; color: var(--muted); font-family: 'DM Mono', monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.qty-num { font-family: 'DM Mono', monospace; }
+.qty-ok   { color: var(--green); }
+.qty-part { color: var(--yellow); }
+.qty-no   { color: var(--muted); }
+.qty-over { color: var(--over); }
+
+.progress-wrap { display: flex; align-items: center; gap: 7px; }
+.bar-bg { width: 60px; height: 4px; background: var(--border); border-radius: 2px; flex-shrink: 0; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 2px; }
+.pct-text { font-family: 'DM Mono', monospace; font-size: 12px; min-width: 38px; }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  border-radius: 5px; padding: 3px 8px;
+  font-size: 11.5px; font-weight: 600; white-space: nowrap;
+}
+.b-ok   { background: #122a1e; color: var(--green);  }
+.b-part { background: #2a2010; color: var(--yellow); }
+.b-no   { background: #2a1414; color: var(--red);    }
+.b-over { background: #1e1530; color: var(--over);   }
+
+.date-cell { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+/* ── Empty ── */
+.empty { text-align: center; padding: 56px 24px; }
+.empty-icon { font-size: 32px; margin-bottom: 10px; }
+.empty-title { font-size: 15px; font-weight: 500; margin-bottom: 5px; }
+.empty-sub { font-size: 13px; color: var(--muted); }
+
+/* ── Tooltip ── */
+[data-tip] { position: relative; cursor: default; }
+[data-tip]:hover::after {
+  content: attr(data-tip);
+  position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+  background: #2a3050; color: var(--text); font-size: 12px;
+  padding: 5px 10px; border-radius: 6px; white-space: nowrap;
+  border: 1px solid var(--border); z-index: 100; pointer-events: none;
+  font-family: 'DM Sans', sans-serif; font-weight: 400;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">旺<em>洲</em></div>
+  <span class="sep">|</span>
+  <div class="page-title">到货核查</div>
+  <div class="header-right">
+    <span id="hdr-status" style="font-size:12px;color:var(--muted)"></span>
+  </div>
+</header>
+
+<div class="main">
+
+  <!-- Upload -->
+  <div class="upload-row">
+    <div class="upload-card" id="card-fh" onclick="document.getElementById('inp-fh').click()">
+      <input type="file" id="inp-fh" multiple accept=".xlsx,.xls" onchange="onFH(event)" onclick="event.stopPropagation()">
+      <div class="uc-head"><span class="uc-icon">📦</span><span class="uc-label">发货明细</span></div>
+      <div class="uc-hint">可同时上传多个文件 · xlsx / xls</div>
+      <div class="file-tags" id="fh-tags"></div>
+    </div>
+    <div class="upload-card" id="card-rk" onclick="document.getElementById('inp-rk').click()">
+      <input type="file" id="inp-rk" accept=".xlsx,.xls" onchange="onRK(event)" onclick="event.stopPropagation()">
+      <div class="uc-head"><span class="uc-icon">📋</span><span class="uc-label">入库记录</span></div>
+      <div class="uc-hint">自动读取全部 Sheet · xlsx / xls</div>
+      <div class="file-tags" id="rk-tags"></div>
+    </div>
+  </div>
+
+  <div class="action-row">
+    <button class="btn btn-primary" id="btn-run" disabled onclick="runMatch()">开始比对</button>
+    <span class="status-msg" id="status-msg">请上传两侧文件</span>
+  </div>
+
+  <div id="result-area" style="display:none">
+    <div class="summary-row" id="summary-row"></div>
+    <div class="filter-bar">
+      <select class="order-select" id="order-sel" onchange="render()"><option value="">全部订单</option></select>
+      <input class="search-box" id="search" type="text" placeholder="搜索品名 / 供方..." oninput="render()">
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>主订单</th>
+            <th>品名</th>
+            <th>供方</th>
+            <th>规格</th>
+            <th>发货数</th>
+            <th>入库数</th>
+            <th>完成率</th>
+            <th>状态</th>
+            <th>最新入库日期</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════
+// State
+// ═══════════════════════════════════════════════════
+let fhFiles = [];   // [{name, wb}]
+let rkWb    = null;
+let allRows = [];   // final matched rows
+let curFilter = 'all';
+
+// ═══════════════════════════════════════════════════
+// File I/O
+// ═══════════════════════════════════════════════════
+function readWb(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = e => {
+      try { res(XLSX.read(e.target.result, { type:'array', cellDates:true })); }
+      catch(err) { rej(err); }
+    };
+    r.onerror = rej;
+    r.readAsArrayBuffer(file);
+  });
+}
+
+async function onFH(ev) {
+  for (const f of Array.from(ev.target.files)) {
+    if (fhFiles.find(x => x.name === f.name)) continue;
+    fhFiles.push({ name: f.name, wb: await readWb(f) });
+  }
+  ev.target.value = '';
+  renderFHTags();
+  checkReady();
+}
+
+async function onRK(ev) {
+  const f = ev.target.files[0]; if (!f) return;
+  rkWb = await readWb(f);
+  document.getElementById('rk-tags').innerHTML =
+    `<div class="file-tag">📋 ${f.name} <button onclick="removeRK(event)">×</button></div>`;
+  document.getElementById('card-rk').classList.add('loaded');
+  ev.target.value = '';
+  checkReady();
+}
+
+function renderFHTags() {
+  document.getElementById('fh-tags').innerHTML = fhFiles.map((f,i) =>
+    `<div class="file-tag">📦 ${f.name} <button onclick="removeFH(event,${i})">×</button></div>`
+  ).join('');
+  document.getElementById('card-fh').classList.toggle('loaded', fhFiles.length > 0);
+}
+function removeFH(ev, i) { ev.stopPropagation(); fhFiles.splice(i,1); renderFHTags(); checkReady(); }
+function removeRK(ev)    { ev.stopPropagation(); rkWb=null; document.getElementById('rk-tags').innerHTML=''; document.getElementById('card-rk').classList.remove('loaded'); checkReady(); }
+
+function checkReady() {
+  const ok = fhFiles.length > 0 && rkWb;
+  document.getElementById('btn-run').disabled = !ok;
+  document.getElementById('status-msg').textContent = ok
+    ? `${fhFiles.length} 份发货明细，准备就绪`
+    : '请上传两侧文件';
+}
+
+// ═══════════════════════════════════════════════════
+// Text normalisation helpers
+// ═══════════════════════════════════════════════════
+
+// Strip everything inside （）() and trailing spaces, lowercase
+function stripBrackets(s) {
+  return String(s ?? '').replace(/[（(][^）)]*[）)]/g, '').replace(/\s+/g,' ').trim().toLowerCase();
+}
+
+// Remove model-prefix junk like "FRO2718-60 " or "W914-48 " at the start
+// and normalise to core Chinese noun phrase
+function coreNoun(s) {
+  return stripBrackets(s)
+    .replace(/^[a-z0-9\-\.]+\s*/i, '')   // leading product codes
+    .replace(/[（(][^）)]*[）)]/g, '')     // any remaining brackets
+    .replace(/\s+/g,'')
+    .toLowerCase();
+}
+
+// Extract keywords (≥2 chars, pure Chinese)
+function zhKeywords(s) {
+  return (s.match(/[\u4e00-\u9fa5]{2,}/g) || []);
+}
+
+// Supplier short-match: does A contain B or vice versa after stripping generic suffixes
+function supplierMatch(a, b) {
+  if (!a || !b) return false;
+  const clean = s => String(s).replace(/有限公司|包装|制品|材料|印刷厂|科技|实业/g,'').replace(/\s/g,'');
+  const ca = clean(a), cb = clean(b);
+  return ca.includes(cb) || cb.includes(ca);
+}
+
+// Spec similarity: share at least one numeric token
+function specOverlap(a, b) {
+  if (!a || !b) return false;
+  const nums = s => (String(s).match(/\d+\.?\d*/g) || []);
+  const na = nums(a), nb = nums(b);
+  return na.some(n => nb.includes(n));
+}
+
+// ═══════════════════════════════════════════════════
+// Parse functions
+// ═══════════════════════════════════════════════════
+
+function parseFH(files) {
+  const rows = [];
+  for (const f of files) {
+    for (const sn of f.wb.SheetNames) {
+      const ws = f.wb.Sheets[sn];
+      const raw = XLSX.utils.sheet_to_json(ws, { header:1, defval:null });
+      // Find header row
+      let hi = 0;
+      for (let i = 0; i < Math.min(raw.length, 4); i++) {
+        if (raw[i]?.some(c => c && /品名|物料名/.test(String(c)))) { hi = i; break; }
+      }
+      const H = raw[hi].map(h => String(h??'').trim());
+      const col = key => {
+        const variants = { '主订单号':['主订单号','主订单'], '品名':['品名','物料名称'], '规格':['规格','规格型号'], '数量':['数量','订单数'], '供方':['供方','供应商'], '品号':['品号','物料编号'] };
+        const ks = variants[key] || [key];
+        for (const k of ks) { const i = H.indexOf(k); if (i>=0) return i; }
+        return H.findIndex(h => h.includes(key.slice(0,2)));
+      };
+      const iOrder=col('主订单号'), iName=col('品名'), iSpec=col('规格'), iQty=col('数量'), iSup=col('供方'), iItem=col('品号');
+      for (const row of raw.slice(hi+1)) {
+        const order = String(row[iOrder]??'').trim();
+        const name  = String(row[iName] ??'').trim();
+        const qty   = parseFloat(row[iQty]) || 0;
+        if (!order && !name) continue;
+        if (!name || qty === 0) continue;
+        rows.push({
+          order, name, qty,
+          spec:     String(row[iSpec] ??'').trim(),
+          supplier: String(row[iSup]  ??'').trim(),
+          itemNo:   String(row[iItem] ??'').trim(),
+          srcFile:  f.name,
+        });
+      }
+    }
+  }
+  return rows;
+}
+
+function parseRK(wb) {
+  const entries = [];
+  for (const sn of wb.SheetNames) {
+    const ws = wb.Sheets[sn];
+    const raw = XLSX.utils.sheet_to_json(ws, { header:1, defval:null });
+    let hi = -1;
+    for (let i=0; i<Math.min(raw.length,5); i++) {
+      if (raw[i]?.some(c => c && /主订单/.test(String(c)))) { hi=i; break; }
+    }
+    if (hi<0) continue;
+    const H = raw[hi].map(h => String(h??'').trim());
+    const idx = k => H.indexOf(k);
+    const iOrder=idx('主订单'), iName=idx('物料名称'), iSpec=idx('规格型号'), iIn=idx('入库数'), iDate=idx('日期'), iSup=idx('供应商'), iItem=idx('物料编号'), iOrd=idx('订单数');
+    for (const row of raw.slice(hi+1)) {
+      const order = String(row[iOrder]??'').trim();
+      if (!order) continue;
+      const inQty = parseFloat(row[iIn]) || 0;
+      let date = row[iDate];
+      if (date instanceof Date) date = date.toISOString().slice(0,10);
+      else if (date) date = String(date).slice(0,10);
+      entries.push({
+        order,
+        name:     String(row[iName]??'').trim(),
+        spec:     String(row[iSpec]??'').trim(),
+        inQty,
+        ordQty:   parseFloat(row[iOrd]) || 0,
+        date:     date||'',
+        supplier: String(row[iSup] ??'').trim(),
+        itemNo:   String(row[iItem]??'').trim(),
+        _used:    false,
+      });
+    }
+  }
+  return entries;
+}
+
+// ═══════════════════════════════════════════════════
+// Matching engine  — each RK entry matched to exactly one FH row
+// ═══════════════════════════════════════════════════
+function score(fh, rk) {
+  // Order must be exact
+  if (fh.order !== rk.order) return 0;
+
+  let s = 0;
+
+  // ── Name matching ──
+  const fhCore  = coreNoun(fh.name);
+  const rkCore  = coreNoun(rk.name);
+  const fhKw    = zhKeywords(fhCore);
+  const rkKw    = zhKeywords(rkCore);
+
+  if (fhCore && rkCore) {
+    if (fhCore === rkCore) s += 20;
+    else if (fhCore.includes(rkCore) || rkCore.includes(fhCore)) s += 14;
+    else {
+      // keyword overlap
+      const overlap = fhKw.filter(w => rkKw.some(r => r.includes(w) || w.includes(r)));
+      if (overlap.length === 0) return 0;   // no name match → skip
+      s += overlap.length * 4;
+    }
+  } else {
+    return 0;
+  }
+
+  // ── Supplier bonus ──
+  if (supplierMatch(fh.supplier, rk.supplier)) s += 6;
+
+  // ── Spec bonus ──
+  if (specOverlap(fh.spec, rk.spec)) s += 3;
+
+  // ── ItemNo bonus ──
+  if (fh.itemNo && rk.itemNo && fh.itemNo === rk.itemNo) s += 5;
+
+  return s;
+}
+
+function runMatch() {
+  document.getElementById('btn-run').disabled = true;
+  document.getElementById('status-msg').textContent = '正在比对…';
+
+  setTimeout(() => {
+    try {
+      const fhRows  = parseFH(fhFiles);
+      const rkAll   = parseRK(rkWb);
+
+      // Reset used flag
+      rkAll.forEach(r => r._used = false);
+
+      // For every FH row, collect RK entries ordered by score desc
+      // Each RK entry can only be matched once
+      const results = fhRows.map(fh => {
+        const candidates = rkAll
+          .map((rk, i) => ({ i, s: score(fh, rk) }))
+          .filter(x => x.s > 0)
+          .sort((a,b) => b.s - a.s);
+
+        // Greedy: take candidates that are not yet used, stop when scores drop significantly
+        const taken = [];
+        let topScore = candidates[0]?.s ?? 0;
+        for (const c of candidates) {
+          if (rkAll[c.i]._used) continue;
+          if (c.s < topScore * 0.6) break;   // score drop-off threshold
+          taken.push(rkAll[c.i]);
+          rkAll[c.i]._used = true;
+        }
+
+        const totalIn   = taken.reduce((s,r) => s+r.inQty, 0);
+        const dates     = taken.map(r=>r.date).filter(Boolean).sort().reverse();
+        const latestDate= dates[0]||'';
+
+        let pct = fh.qty > 0 ? totalIn/fh.qty : (totalIn>0?1:0);
+        let status;
+        if      (totalIn === 0)  status = 'no';
+        else if (pct >= 0.95)    status = 'ok';
+        else if (pct > 1.1)      status = 'over';
+        else                     status = 'part';
+        // re-check over
+        if (pct > 1.1)           status = 'over';
+        if (pct >= 0.95 && pct <= 1.1) status = 'ok';
+
+        return { ...fh, totalIn, pct, status, latestDate, matchCount: taken.length };
+      });
+
+      allRows = results;
+
+      // Populate order filter
+      const orders = [...new Set(allRows.map(r=>r.order).filter(Boolean))].sort();
+      const sel = document.getElementById('order-sel');
+      sel.innerHTML = '<option value="">全部订单</option>' +
+        orders.map(o=>`<option value="${o}">${o}</option>`).join('');
+
+      document.getElementById('result-area').style.display = '';
+      curFilter = 'all';
+      renderSummary();
+      render();
+
+      const hdr = `${allRows.length} 条记录`;
+      document.getElementById('hdr-status').textContent = hdr;
+      document.getElementById('status-msg').textContent = `比对完成 · ${allRows.length} 条发货明细`;
+    } catch(e) {
+      console.error(e);
+      document.getElementById('status-msg').textContent = '出错：' + e.message;
+    }
+    document.getElementById('btn-run').disabled = false;
+  }, 30);
+}
+
+// ═══════════════════════════════════════════════════
+// Render
+// ═══════════════════════════════════════════════════
+function renderSummary() {
+  const total = allRows.length;
+  const ok   = allRows.filter(r=>r.status==='ok'||r.status==='over').length;
+  const part = allRows.filter(r=>r.status==='part').length;
+  const no   = allRows.filter(r=>r.status==='no').length;
+
+  const pills = [
+    { f:'all',  cls:'p-all',  label:`全部 ${total}` },
+    { f:'ok',   cls:'p-ok',   label:`✓ 已到货 ${ok}` },
+    { f:'part', cls:'p-part', label:`! 部分到 ${part}` },
+    { f:'no',   cls:'p-no',   label:`✗ 未到货 ${no}` },
+  ];
+  document.getElementById('summary-row').innerHTML = pills.map(p =>
+    `<div class="pill ${p.cls}${curFilter===p.f?' active':''}" onclick="setFilter('${p.f}',this)">
+      <div class="pill-dot"></div>${p.label}
+    </div>`
+  ).join('');
+}
+
+function setFilter(f) {
+  curFilter = f;
+  renderSummary();
+  render();
+}
+
+function render() {
+  const search  = (document.getElementById('search').value||'').toLowerCase();
+  const orderF  = document.getElementById('order-sel').value;
+
+  const rows = allRows.filter(r => {
+    if (orderF && r.order !== orderF) return false;
+    if (curFilter==='ok'   && r.status!=='ok' && r.status!=='over') return false;
+    if (curFilter==='part' && r.status!=='part') return false;
+    if (curFilter==='no'   && r.status!=='no')   return false;
+    if (search) {
+      const h = (r.name+r.supplier+r.spec+r.order).toLowerCase();
+      if (!h.includes(search)) return false;
+    }
+    return true;
+  });
+
+  const tb = document.getElementById('tbody');
+  if (rows.length === 0) {
+    tb.innerHTML = `<tr><td colspan="9"><div class="empty">
+      <div class="empty-icon">🔍</div>
+      <div class="empty-title">没有符合条件的记录</div>
+      <div class="empty-sub">换个筛选条件试试</div>
+    </div></td></tr>`;
+    return;
+  }
+
+  tb.innerHTML = rows.map(r => {
+    // Name: strip bracket note for display but show it smaller
+    const nameMain = r.name.replace(/[（(][^）)]*[）)]/g,'').trim();
+    const nameNote = (r.name.match(/[（(]([^）)]*)[）)]/)?.[1]||'').trim();
+
+    // Progress bar
+    const pct  = Math.min(r.pct, 1);
+    const barW = Math.round(pct*60);
+    const barColor = r.status==='ok'||r.status==='over' ? 'var(--green)'
+                   : r.status==='part' ? 'var(--yellow)' : 'var(--border)';
+    const pctText = r.qty>0 ? Math.round(r.pct*100)+'%' : '—';
+
+    // In qty colour
+    const inClass = r.totalIn===0?'qty-no':r.status==='ok'||r.status==='over'?'qty-ok':r.status==='part'?'qty-part':'qty-no';
+    const inDisplay = r.totalIn>0 ? `<span class="qty-num ${inClass}">${r.totalIn}</span>` : `<span class="muted">—</span>`;
+
+    // Status badge
+    const badges = {
+      ok:   ['b-ok',   '✓ 已到货'],
+      over: ['b-over', '↑ 超额到'],
+      part: ['b-part', '! 部分到'],
+      no:   ['b-no',   '✗ 未到货'],
+    };
+    const [bc, bl] = badges[r.status] || badges.no;
+
+    // Source file tooltip if multiple
+    const srcTip = fhFiles.length>1 ? `data-tip="${r.srcFile}"` : '';
+
+    return `<tr>
+      <td><span class="order-badge" ${srcTip}>${r.order}</span></td>
+      <td class="name-cell">
+        <div class="name-main">${nameMain}</div>
+        ${nameNote?`<div class="name-note">${nameNote}</div>`:''}
+      </td>
+      <td class="supplier-cell muted" title="${r.supplier}">${r.supplier||'—'}</td>
+      <td class="spec-cell" title="${r.spec}">${r.spec||'—'}</td>
+      <td class="qty-num">${r.qty}</td>
+      <td>${inDisplay}</td>
+      <td>
+        <div class="progress-wrap">
+          <div class="bar-bg"><div class="bar-fill" style="width:${barW}px;background:${barColor}"></div></div>
+          <span class="pct-text">${pctText}</span>
+        </div>
+      </td>
+      <td><span class="badge ${bc}">${bl}</span></td>
+      <td class="date-cell">${r.latestDate||'—'}</td>
+    </tr>`;
+  }).join('');
+}
+</script>
+</body>
+</html>
