@@ -1,0 +1,1329 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>旺洲仓库 · 数据中心</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+:root {
+  --bg:        #07090f;
+  --bg2:       #0c1018;
+  --panel:     #111520;
+  --panel2:    #161c2a;
+  --border:    rgba(255,255,255,0.07);
+  --border2:   rgba(255,255,255,0.12);
+  --text:      #e8eef8;
+  --muted:     #6b7a99;
+  --dim:       #363e52;
+  --c1:        #4f9eff;   /* 蓝 */
+  --c1g:       rgba(79,158,255,0.15);
+  --c2:        #36d9a0;   /* 绿 */
+  --c2g:       rgba(54,217,160,0.12);
+  --c3:        #ff9445;   /* 橙 */
+  --c3g:       rgba(255,148,69,0.12);
+  --c4:        #c77dff;   /* 紫 */
+  --c4g:       rgba(199,125,255,0.12);
+  --c5:        #ff5c7a;   /* 红 */
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-body: 'Noto Sans SC', sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 13px;
+  overflow: hidden;
+  height: 100vh;
+}
+
+/* ─── Upload Overlay ─── */
+#uploadOverlay {
+  position: fixed; inset: 0;
+  background: var(--bg);
+  z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+  flex-direction: column;
+  gap: 0;
+  transition: opacity 0.6s ease;
+}
+
+.upload-bg {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(ellipse 60% 40% at 30% 50%, rgba(79,158,255,0.06) 0%, transparent 70%),
+    radial-gradient(ellipse 40% 60% at 75% 40%, rgba(54,217,160,0.05) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.grid-lines {
+  position: absolute; inset: 0; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 30%, transparent 100%);
+}
+
+.upload-card {
+  position: relative;
+  background: var(--panel);
+  border: 1px solid var(--border2);
+  border-radius: 20px;
+  padding: 48px 56px;
+  text-align: center;
+  max-width: 480px;
+  width: 90%;
+  box-shadow: 0 40px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04);
+}
+
+.brand {
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  margin-bottom: 36px;
+}
+.brand-icon {
+  width: 44px; height: 44px;
+  background: linear-gradient(135deg, var(--c1), var(--c2));
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; font-weight: 900; color: #fff;
+  box-shadow: 0 8px 24px rgba(79,158,255,0.3);
+}
+.brand-name { font-size: 20px; font-weight: 700; letter-spacing: 0.02em; }
+.brand-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+.drop-area {
+  border: 1.5px dashed var(--dim);
+  border-radius: 14px;
+  padding: 36px 24px;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.25s;
+  background: rgba(255,255,255,0.015);
+}
+.drop-area:hover, .drop-area.over {
+  border-color: var(--c1);
+  background: var(--c1g);
+}
+.drop-area input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+
+.drop-icon {
+  font-size: 36px; margin-bottom: 14px;
+  filter: drop-shadow(0 0 12px rgba(79,158,255,0.4));
+}
+.drop-title { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+.drop-hint { font-size: 12px; color: var(--muted); }
+.drop-types {
+  display: flex; gap: 6px; justify-content: center; margin-top: 14px;
+}
+.type-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.06);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+.upload-tip {
+  margin-top: 20px;
+  font-size: 11px;
+  color: var(--dim);
+  line-height: 1.7;
+}
+.upload-tip span { color: var(--c2); }
+
+/* ─── Main Dashboard ─── */
+#dashboard {
+  display: none;
+  height: 100vh;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Header */
+.dash-header {
+  height: 52px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center;
+  padding: 0 20px;
+  gap: 16px;
+  background: rgba(11,14,21,0.8);
+  backdrop-filter: blur(16px);
+  flex-shrink: 0;
+}
+.dash-logo {
+  width: 28px; height: 28px;
+  background: linear-gradient(135deg, var(--c1), var(--c2));
+  border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 900; color: #fff;
+}
+.dash-title { font-size: 13px; font-weight: 700; }
+.dash-divider { width: 1px; height: 18px; background: var(--border2); }
+.dash-subtitle { font-size: 11px; color: var(--muted); font-family: var(--font-mono); }
+
+.dash-nav {
+  display: flex; gap: 2px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 8px;
+  padding: 3px;
+  margin-left: 8px;
+}
+.dash-nav-item {
+  padding: 5px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--muted);
+  transition: all 0.15s;
+  user-select: none;
+}
+.dash-nav-item:hover { color: var(--text); }
+.dash-nav-item.active { background: var(--panel2); color: var(--text); }
+
+.header-right {
+  margin-left: auto;
+  display: flex; align-items: center; gap: 12px;
+}
+.time-display {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.reload-btn {
+  padding: 5px 12px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid var(--border2);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+  transition: all 0.15s;
+}
+.reload-btn:hover { border-color: var(--c1); color: var(--c1); }
+
+/* ─── Layout ─── */
+.dash-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* Pages */
+.page { display: none; flex: 1; overflow: auto; padding: 16px; }
+.page.active { display: block; }
+
+/* ─── KPI Row ─── */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.kpi {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 18px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.2s, transform 0.2s;
+  cursor: default;
+}
+.kpi:hover { transform: translateY(-1px); }
+.kpi::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  border-radius: 12px 12px 0 0;
+}
+.kpi.blue::before { background: linear-gradient(90deg, var(--c1), transparent); }
+.kpi.green::before { background: linear-gradient(90deg, var(--c2), transparent); }
+.kpi.orange::before { background: linear-gradient(90deg, var(--c3), transparent); }
+.kpi.purple::before { background: linear-gradient(90deg, var(--c4), transparent); }
+.kpi:hover.blue { border-color: rgba(79,158,255,0.3); }
+.kpi:hover.green { border-color: rgba(54,217,160,0.3); }
+.kpi:hover.orange { border-color: rgba(255,148,69,0.3); }
+.kpi:hover.purple { border-color: rgba(199,125,255,0.3); }
+
+.kpi-label { font-size: 11px; color: var(--muted); margin-bottom: 8px; letter-spacing: 0.04em; }
+.kpi-value {
+  font-family: var(--font-mono);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+.kpi.blue .kpi-value { color: var(--c1); }
+.kpi.green .kpi-value { color: var(--c2); }
+.kpi.orange .kpi-value { color: var(--c3); }
+.kpi.purple .kpi-value { color: var(--c4); }
+.kpi-sub { font-size: 10px; color: var(--dim); }
+.kpi-icon {
+  position: absolute; right: 14px; top: 14px;
+  font-size: 20px; opacity: 0.15;
+}
+
+/* ─── Chart Grid ─── */
+.chart-grid {
+  display: grid;
+  gap: 10px;
+}
+.chart-grid-2 { grid-template-columns: 1fr 1fr; }
+.chart-grid-3 { grid-template-columns: 2fr 1fr; }
+
+.chart-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+}
+.chart-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px;
+}
+.chart-title { font-size: 12px; font-weight: 600; color: var(--text); }
+.chart-meta { font-size: 10px; color: var(--dim); font-family: var(--font-mono); }
+
+.chart-wrap { position: relative; flex: 1; min-height: 0; }
+.chart-wrap canvas { max-height: 200px; }
+.chart-wrap-tall canvas { max-height: 260px; }
+
+/* ─── Table in dashboard ─── */
+.mini-table-wrap {
+  overflow: auto;
+  max-height: 220px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.mini-table {
+  width: 100%; border-collapse: collapse; font-size: 11px;
+}
+.mini-table thead { position: sticky; top: 0; z-index: 5; }
+.mini-table th {
+  background: var(--panel2);
+  padding: 8px 12px;
+  text-align: left;
+  color: var(--muted);
+  font-weight: 500;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+.mini-table td {
+  padding: 7px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.mini-table tr:hover td { background: rgba(255,255,255,0.02); color: var(--text); }
+.mini-table tr:last-child td { border-bottom: none; }
+.mono { font-family: var(--font-mono); }
+.val-blue { color: var(--c1); font-family: var(--font-mono); }
+.val-green { color: var(--c2); font-family: var(--font-mono); }
+.val-orange { color: var(--c3); font-family: var(--font-mono); }
+
+/* Top list */
+.top-list { display: flex; flex-direction: column; gap: 8px; }
+.top-item {
+  display: flex; align-items: center; gap: 10px;
+}
+.top-rank {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--dim);
+  width: 18px;
+  flex-shrink: 0;
+}
+.top-name { flex: 1; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.top-bar-wrap { width: 100px; flex-shrink: 0; }
+.top-bar-bg { height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; }
+.top-bar-fill { height: 4px; border-radius: 2px; transition: width 0.6s ease; }
+.top-val { font-family: var(--font-mono); font-size: 11px; color: var(--text); width: 50px; text-align: right; flex-shrink: 0; }
+
+/* Tag badges */
+.tag {
+  display: inline-block;
+  font-size: 9px;
+  font-family: var(--font-mono);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+.tag-blue { background: var(--c1g); color: var(--c1); border: 1px solid rgba(79,158,255,0.2); }
+.tag-green { background: var(--c2g); color: var(--c2); border: 1px solid rgba(54,217,160,0.2); }
+.tag-orange { background: var(--c3g); color: var(--c3); border: 1px solid rgba(255,148,69,0.2); }
+
+/* ─── Full table page ─── */
+.full-toolbar {
+  display: flex; gap: 8px; align-items: center; margin-bottom: 12px;
+}
+.full-search {
+  flex: 1;
+  background: var(--panel);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 8px 14px;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.full-search:focus { border-color: var(--c1); }
+.full-search::placeholder { color: var(--dim); }
+
+.select-sheet {
+  background: var(--panel);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 7px 12px;
+  color: var(--text);
+  font-size: 12px;
+  outline: none;
+  cursor: pointer;
+}
+.action-btn {
+  padding: 7px 14px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid var(--border2);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.action-btn:hover { border-color: var(--c1); color: var(--c1); }
+.action-btn.primary {
+  background: var(--c1g);
+  border-color: rgba(79,158,255,0.3);
+  color: var(--c1);
+}
+
+.full-table-wrap {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.full-table-scroll { overflow: auto; max-height: calc(100vh - 220px); }
+.full-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.full-table thead { position: sticky; top: 0; z-index: 10; }
+.full-table th {
+  background: var(--panel2);
+  padding: 10px 14px;
+  text-align: left;
+  color: var(--muted);
+  font-weight: 500;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  transition: color 0.15s;
+}
+.full-table th:hover { color: var(--text); }
+.full-table td {
+  padding: 9px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.full-table tr:hover td { background: rgba(255,255,255,0.02); color: var(--text); }
+.full-table tr:last-child td { border-bottom: none; }
+.full-table td.num { font-family: var(--font-mono); text-align: right; }
+.full-table td.date-cell { font-family: var(--font-mono); font-size: 11px; color: var(--dim); }
+
+.table-foot {
+  padding: 10px 14px;
+  background: var(--panel2);
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+  color: var(--dim);
+  display: flex; justify-content: space-between;
+  font-family: var(--font-mono);
+}
+
+/* ─── Empty state ─── */
+.no-data {
+  text-align: center;
+  padding: 40px;
+  color: var(--dim);
+}
+.no-data-icon { font-size: 32px; margin-bottom: 8px; opacity: 0.4; }
+
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+/* ─── Animations ─── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-in { animation: fadeUp 0.4s ease both; }
+.fade-in-1 { animation-delay: 0.05s; }
+.fade-in-2 { animation-delay: 0.1s; }
+.fade-in-3 { animation-delay: 0.15s; }
+.fade-in-4 { animation-delay: 0.2s; }
+
+@keyframes countUp {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ UPLOAD OVERLAY ═══════════════ -->
+<div id="uploadOverlay">
+  <div class="upload-bg"></div>
+  <div class="grid-lines"></div>
+  <div class="upload-card">
+    <div class="brand">
+      <div class="brand-icon">旺</div>
+      <div>
+        <div class="brand-name">旺洲仓库数据中心</div>
+        <div class="brand-sub">上海旺洲实业有限公司 · Warehouse Intelligence</div>
+      </div>
+    </div>
+    <div class="drop-area" id="dropArea">
+      <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" multiple>
+      <div class="drop-icon">📊</div>
+      <div class="drop-title">上传仓库数据文件</div>
+      <div class="drop-hint">拖拽文件到此处，或点击选择</div>
+      <div class="drop-types">
+        <span class="type-badge">.xlsx</span>
+        <span class="type-badge">.xls</span>
+        <span class="type-badge">多文件</span>
+      </div>
+    </div>
+    <div class="upload-tip">
+      支持 <span>盘点表</span> · <span>领用记录</span> · <span>入库记录</span> · <span>仓库报表</span><br>
+      文件名含对应关键词即可自动识别
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ DASHBOARD ═══════════════ -->
+<div id="dashboard" style="display:flex; flex-direction:column;">
+
+  <div class="dash-header">
+    <div class="dash-logo">旺</div>
+    <div class="dash-title">旺洲仓库数据中心</div>
+    <div class="dash-divider"></div>
+    <div class="dash-subtitle" id="hdrSubtitle">—</div>
+
+    <div class="dash-nav">
+      <div class="dash-nav-item active" onclick="showPage('overview')" id="nav-overview">总览</div>
+      <div class="dash-nav-item" onclick="showPage('inventory')" id="nav-inventory">盘点</div>
+      <div class="dash-nav-item" onclick="showPage('usage')" id="nav-usage">领用</div>
+      <div class="dash-nav-item" onclick="showPage('inbound')" id="nav-inbound">入库</div>
+      <div class="dash-nav-item" onclick="showPage('raw')" id="nav-raw">明细</div>
+    </div>
+
+    <div class="header-right">
+      <div class="time-display" id="clock">—</div>
+      <button class="reload-btn" onclick="resetApp()">重新上传</button>
+    </div>
+  </div>
+
+  <div class="dash-body">
+    <!-- ─── Overview Page ─── -->
+    <div class="page active" id="page-overview">
+      <div class="kpi-row">
+        <div class="kpi blue fade-in fade-in-1">
+          <div class="kpi-icon">📦</div>
+          <div class="kpi-label">盘点物料种类</div>
+          <div class="kpi-value" id="kpi-items">—</div>
+          <div class="kpi-sub">已录入品类</div>
+        </div>
+        <div class="kpi green fade-in fade-in-2">
+          <div class="kpi-icon">📤</div>
+          <div class="kpi-label">领用记录总条数</div>
+          <div class="kpi-value" id="kpi-usage">—</div>
+          <div class="kpi-sub">全部年度合计</div>
+        </div>
+        <div class="kpi orange fade-in fade-in-3">
+          <div class="kpi-icon">📥</div>
+          <div class="kpi-label">入库记录总条数</div>
+          <div class="kpi-value" id="kpi-inbound">—</div>
+          <div class="kpi-sub">全部年度合计</div>
+        </div>
+        <div class="kpi purple fade-in fade-in-4">
+          <div class="kpi-icon">🏭</div>
+          <div class="kpi-label">已加载文件</div>
+          <div class="kpi-value" id="kpi-files">—</div>
+          <div class="kpi-sub" id="kpi-files-sub">—</div>
+        </div>
+      </div>
+
+      <div class="chart-grid chart-grid-2" style="margin-bottom:10px;">
+        <div class="chart-panel fade-in fade-in-2">
+          <div class="chart-header">
+            <span class="chart-title">月度领用趋势</span>
+            <span class="chart-meta" id="usageTrendMeta">—</span>
+          </div>
+          <div class="chart-wrap chart-wrap-tall">
+            <canvas id="usageTrendChart"></canvas>
+          </div>
+        </div>
+        <div class="chart-panel fade-in fade-in-3">
+          <div class="chart-header">
+            <span class="chart-title">月度入库趋势</span>
+            <span class="chart-meta" id="inboundTrendMeta">—</span>
+          </div>
+          <div class="chart-wrap chart-wrap-tall">
+            <canvas id="inboundTrendChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="chart-grid chart-grid-3">
+        <div class="chart-panel fade-in fade-in-3">
+          <div class="chart-header">
+            <span class="chart-title">领用部门分布</span>
+            <span class="chart-meta" id="deptMeta">—</span>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="deptChart"></canvas>
+          </div>
+        </div>
+        <div class="chart-panel fade-in fade-in-4">
+          <div class="chart-header">
+            <span class="chart-title">供应商占比</span>
+            <span class="chart-meta" id="supplierMeta">—</span>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="supplierChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── Inventory Page ─── -->
+    <div class="page" id="page-inventory">
+      <div class="kpi-row" style="grid-template-columns: repeat(3, 1fr);">
+        <div class="kpi blue"><div class="kpi-label">物料总种类</div><div class="kpi-value" id="inv-kpi1">—</div></div>
+        <div class="kpi green"><div class="kpi-label">总库存数量</div><div class="kpi-value" id="inv-kpi2">—</div></div>
+        <div class="kpi orange"><div class="kpi-label">涉及单位种类</div><div class="kpi-value" id="inv-kpi3">—</div></div>
+      </div>
+      <div class="chart-grid chart-grid-2" style="margin-bottom:10px;">
+        <div class="chart-panel">
+          <div class="chart-header"><span class="chart-title">库存数量 TOP 15</span></div>
+          <div class="chart-wrap chart-wrap-tall"><canvas id="invBarChart"></canvas></div>
+        </div>
+        <div class="chart-panel">
+          <div class="chart-header"><span class="chart-title">物料名称排行</span></div>
+          <div style="padding-top:4px;" id="invTopList" class="top-list"></div>
+        </div>
+      </div>
+      <div class="chart-panel">
+        <div class="chart-header"><span class="chart-title">盘点明细</span></div>
+        <div class="mini-table-wrap" id="invTableWrap"></div>
+      </div>
+    </div>
+
+    <!-- ─── Usage Page ─── -->
+    <div class="page" id="page-usage">
+      <div class="kpi-row" style="grid-template-columns: repeat(4, 1fr);">
+        <div class="kpi blue"><div class="kpi-label">领用记录数</div><div class="kpi-value" id="usg-kpi1">—</div></div>
+        <div class="kpi green"><div class="kpi-label">涉及物料种类</div><div class="kpi-value" id="usg-kpi2">—</div></div>
+        <div class="kpi orange"><div class="kpi-label">领用部门数</div><div class="kpi-value" id="usg-kpi3">—</div></div>
+        <div class="kpi purple"><div class="kpi-label">2026年记录数</div><div class="kpi-value" id="usg-kpi4">—</div></div>
+      </div>
+      <div class="chart-grid chart-grid-2" style="margin-bottom:10px;">
+        <div class="chart-panel">
+          <div class="chart-header"><span class="chart-title">月度领用量趋势</span></div>
+          <div class="chart-wrap chart-wrap-tall"><canvas id="usgMonthChart"></canvas></div>
+        </div>
+        <div class="chart-panel">
+          <div class="chart-header"><span class="chart-title">部门领用分布</span></div>
+          <div class="chart-wrap chart-wrap-tall"><canvas id="usgDeptChart"></canvas></div>
+        </div>
+      </div>
+      <div class="chart-panel">
+        <div class="chart-header"><span class="chart-title">高频领用物料 TOP 10</span></div>
+        <div id="usgTopItems" class="top-list" style="padding:4px 0;"></div>
+      </div>
+    </div>
+
+    <!-- ─── Inbound Page ─── -->
+    <div class="page" id="page-inbound">
+      <div class="kpi-row" style="grid-template-columns: repeat(4, 1fr);">
+        <div class="kpi blue"><div class="kpi-label">入库记录数</div><div class="kpi-value" id="inb-kpi1">—</div></div>
+        <div class="kpi green"><div class="kpi-label">供应商数量</div><div class="kpi-value" id="inb-kpi2">—</div></div>
+        <div class="kpi orange"><div class="kpi-label">主订单数量</div><div class="kpi-value" id="inb-kpi3">—</div></div>
+        <div class="kpi purple"><div class="kpi-label">2026年入库数</div><div class="kpi-value" id="inb-kpi4">—</div></div>
+      </div>
+      <div class="chart-grid chart-grid-2" style="margin-bottom:10px;">
+        <div class="chart-panel">
+          <div class="chart-header"><span class="chart-title">月度入库量趋势</span></div>
+          <div class="chart-wrap chart-wrap-tall"><canvas id="inbMonthChart"></canvas></div>
+        </div>
+        <div class="chart-panel">
+          <div class="chart-header"><span class="chart-title">供应商入库占比</span></div>
+          <div class="chart-wrap chart-wrap-tall"><canvas id="inbSupplierChart"></canvas></div>
+        </div>
+      </div>
+      <div class="chart-panel">
+        <div class="chart-header"><span class="chart-title">主要物料入库排行</span></div>
+        <div id="inbTopItems" class="top-list" style="padding:4px 0;"></div>
+      </div>
+    </div>
+
+    <!-- ─── Raw Table Page ─── -->
+    <div class="page" id="page-raw">
+      <div class="full-toolbar">
+        <select class="select-sheet" id="rawFileSelect" onchange="renderRawTable()">
+          <option value="">— 选择数据集 —</option>
+        </select>
+        <select class="select-sheet" id="rawSheetSelect" onchange="renderRawTable()">
+          <option value="">— 工作表 —</option>
+        </select>
+        <input class="full-search" id="rawSearch" placeholder="搜索任意字段…" oninput="renderRawTable()">
+        <button class="action-btn primary" onclick="exportCSV()">↓ 导出 CSV</button>
+      </div>
+      <div class="full-table-wrap">
+        <div class="full-table-scroll">
+          <table class="full-table" id="rawTable">
+            <thead id="rawThead"></thead>
+            <tbody id="rawTbody"></tbody>
+          </table>
+        </div>
+        <div class="table-foot">
+          <span id="rawCount">—</span>
+          <span id="rawTime">—</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════
+const S = {
+  files: {},      // type -> { name, sheets: { sName: rows[] } }
+  charts: {},
+  rawSort: { col: -1, dir: 1 }
+};
+
+const TYPE_MAP = { inventory:'盘点', usage:'领用', inbound:'入库', warehouse:'报表', other:'其他' };
+const COLORS = ['#4f9eff','#36d9a0','#ff9445','#c77dff','#ff5c7a','#ffd166','#06d6a0','#118ab2'];
+
+// ══════════════════════════════════════════════
+// CLOCK
+// ══════════════════════════════════════════════
+function updateClock() {
+  const n = new Date();
+  const pad = x => String(x).padStart(2,'0');
+  document.getElementById('clock').textContent =
+    `${n.getFullYear()}-${pad(n.getMonth()+1)}-${pad(n.getDate())} ${pad(n.getHours())}:${pad(n.getMinutes())}:${pad(n.getSeconds())}`;
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ══════════════════════════════════════════════
+// UPLOAD
+// ══════════════════════════════════════════════
+function detectType(name) {
+  const n = name.toLowerCase();
+  if (n.includes('盘点')) return 'inventory';
+  if (n.includes('领用')) return 'usage';
+  if (n.includes('入库')) return 'inbound';
+  if (n.includes('报表') || n.includes('仓库')) return 'warehouse';
+  return 'other';
+}
+
+const dropArea = document.getElementById('dropArea');
+const fileInput = document.getElementById('fileInput');
+
+dropArea.addEventListener('dragover', e => { e.preventDefault(); dropArea.classList.add('over'); });
+dropArea.addEventListener('dragleave', () => dropArea.classList.remove('over'));
+dropArea.addEventListener('drop', e => { e.preventDefault(); dropArea.classList.remove('over'); loadFiles(e.dataTransfer.files); });
+fileInput.addEventListener('change', e => loadFiles(e.target.files));
+
+function loadFiles(files) {
+  const arr = Array.from(files);
+  let done = 0;
+  arr.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+        const type = detectType(file.name);
+        const sheets = {};
+        wb.SheetNames.forEach(sn => {
+          const ws = wb.Sheets[sn];
+          const raw = XLSX.utils.sheet_to_json(ws, { header:1, raw:false, dateNF:'yyyy-mm-dd' });
+          if (raw.some(r => r.some(c => c !== null && c !== undefined && c !== ''))) sheets[sn] = raw;
+        });
+        S.files[type] = { name: file.name, sheets };
+      } catch(err) { console.warn('parse error', file.name, err); }
+      done++;
+      if (done === arr.length) showDashboard();
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function showDashboard() {
+  const overlay = document.getElementById('uploadOverlay');
+  overlay.style.opacity = '0';
+  setTimeout(() => {
+    overlay.style.display = 'none';
+    document.getElementById('dashboard').style.display = 'flex';
+    buildAll();
+  }, 600);
+}
+
+function resetApp() {
+  location.reload();
+}
+
+// ══════════════════════════════════════════════
+// NAVIGATION
+// ══════════════════════════════════════════════
+const PAGES = ['overview','inventory','usage','inbound','raw'];
+function showPage(name) {
+  PAGES.forEach(p => {
+    document.getElementById(`page-${p}`).classList.toggle('active', p === name);
+    document.getElementById(`nav-${p}`).classList.toggle('active', p === name);
+  });
+}
+
+// ══════════════════════════════════════════════
+// DATA HELPERS
+// ══════════════════════════════════════════════
+function getRows(type) {
+  const f = S.files[type];
+  if (!f) return { headers: [], rows: [] };
+  const results = [];
+  let hdrs = [];
+  Object.values(f.sheets).forEach(sheetRows => {
+    let hi = 0;
+    for (let i = 0; i < Math.min(sheetRows.length, 6); i++) {
+      if ((sheetRows[i] || []).filter(c => c && c !== '').length >= 3) { hi = i; break; }
+    }
+    if (!hdrs.length) hdrs = (sheetRows[hi] || []).map(h => String(h ?? ''));
+    const data = sheetRows.slice(hi + 1).filter(r => (r||[]).some(c => c !== null && c !== '' && c !== undefined));
+    results.push(...data);
+  });
+  return { headers: hdrs, rows: results };
+}
+
+function findCol(headers, ...keywords) {
+  for (const kw of keywords) {
+    const i = headers.findIndex(h => String(h).includes(kw));
+    if (i >= 0) return i;
+  }
+  return -1;
+}
+
+function colVals(rows, idx) {
+  if (idx < 0) return [];
+  return rows.map(r => String(r[idx] ?? '').trim()).filter(Boolean);
+}
+
+function groupBy(arr) {
+  const m = {};
+  arr.forEach(v => { m[v] = (m[v] || 0) + 1; });
+  return m;
+}
+
+function groupBySum(rows, keyIdx, valIdx) {
+  const m = {};
+  rows.forEach(r => {
+    const k = String(r[keyIdx] ?? '').trim();
+    const v = parseFloat(r[valIdx] ?? '') || 0;
+    if (k) m[k] = (m[k] || 0) + v;
+  });
+  return m;
+}
+
+function monthKey(dateStr) {
+  const m = String(dateStr).match(/(\d{4})-(\d{2})/);
+  return m ? `${m[1]}-${m[2]}` : null;
+}
+
+// ══════════════════════════════════════════════
+// CHART HELPERS
+// ══════════════════════════════════════════════
+function destroyChart(id) {
+  if (S.charts[id]) { S.charts[id].destroy(); delete S.charts[id]; }
+}
+
+const CHART_DEFAULTS = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { display: false },
+    tooltip: {
+      backgroundColor: '#1a2035',
+      borderColor: 'rgba(255,255,255,0.1)',
+      borderWidth: 1,
+      titleColor: '#e8eef8',
+      bodyColor: '#6b7a99',
+      padding: 10,
+    }
+  },
+  scales: {
+    x: {
+      grid: { color: 'rgba(255,255,255,0.04)' },
+      ticks: { color: '#6b7a99', font: { family: "'JetBrains Mono'", size: 10 } }
+    },
+    y: {
+      grid: { color: 'rgba(255,255,255,0.04)' },
+      ticks: { color: '#6b7a99', font: { family: "'JetBrains Mono'", size: 10 } }
+    }
+  }
+};
+
+function makeLineChart(id, labels, data, color = '#4f9eff') {
+  destroyChart(id);
+  const ctx = document.getElementById(id).getContext('2d');
+  const gradient = ctx.createLinearGradient(0, 0, 0, 220);
+  gradient.addColorStop(0, color + '33');
+  gradient.addColorStop(1, color + '00');
+  S.charts[id] = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        borderColor: color,
+        borderWidth: 2,
+        pointRadius: 3,
+        pointBackgroundColor: color,
+        fill: true,
+        backgroundColor: gradient,
+        tension: 0.4
+      }]
+    },
+    options: { ...CHART_DEFAULTS, animation: { duration: 700 } }
+  });
+}
+
+function makeBarChart(id, labels, data, color = '#4f9eff', horizontal = false) {
+  destroyChart(id);
+  const ctx = document.getElementById(id).getContext('2d');
+  const type = horizontal ? 'bar' : 'bar';
+  S.charts[id] = new Chart(ctx, {
+    type,
+    data: {
+      labels,
+      datasets: [{
+        data,
+        backgroundColor: color + 'aa',
+        borderColor: color,
+        borderWidth: 1,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      ...CHART_DEFAULTS,
+      indexAxis: horizontal ? 'y' : 'x',
+      animation: { duration: 700 }
+    }
+  });
+}
+
+function makeDoughnutChart(id, labels, data) {
+  destroyChart(id);
+  const ctx = document.getElementById(id).getContext('2d');
+  S.charts[id] = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        backgroundColor: COLORS.map(c => c + 'cc'),
+        borderColor: COLORS,
+        borderWidth: 1,
+        hoverOffset: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '62%',
+      plugins: {
+        legend: {
+          display: true,
+          position: 'right',
+          labels: { color: '#6b7a99', font: { family: "'Noto Sans SC'", size: 10 }, boxWidth: 10, padding: 8 }
+        },
+        tooltip: CHART_DEFAULTS.plugins.tooltip
+      },
+      animation: { duration: 700 }
+    }
+  });
+}
+
+// ══════════════════════════════════════════════
+// TOP LIST
+// ══════════════════════════════════════════════
+function renderTopList(containerId, items, color = '#4f9eff') {
+  const el = document.getElementById(containerId);
+  if (!items.length) { el.innerHTML = '<div class="no-data"><div class="no-data-icon">—</div>暂无数据</div>'; return; }
+  const max = items[0][1];
+  el.innerHTML = items.slice(0, 10).map(([name, val], i) => `
+    <div class="top-item">
+      <span class="top-rank">${i+1}</span>
+      <span class="top-name" title="${name}">${name || '—'}</span>
+      <div class="top-bar-wrap">
+        <div class="top-bar-bg">
+          <div class="top-bar-fill" style="width:${max>0?(val/max*100):0}%;background:${color}"></div>
+        </div>
+      </div>
+      <span class="top-val" style="color:${color}">${val.toLocaleString()}</span>
+    </div>
+  `).join('');
+}
+
+function renderMiniTable(containerId, headers, rows, colClasses = {}) {
+  const el = document.getElementById(containerId);
+  if (!rows.length) { el.innerHTML = '<div class="no-data"><div class="no-data-icon">—</div>暂无数据</div>'; return; }
+  const display = rows.slice(0, 200);
+  el.innerHTML = `
+    <table class="mini-table">
+      <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+      <tbody>${display.map(row => `<tr>${headers.map((h, i) => {
+        const val = row[i] ?? '';
+        const cls = colClasses[i] || '';
+        return `<td class="${cls}">${val}</td>`;
+      }).join('')}</tr>`).join('')}</tbody>
+    </table>
+  `;
+}
+
+// ══════════════════════════════════════════════
+// BUILD ALL
+// ══════════════════════════════════════════════
+function buildAll() {
+  buildOverview();
+  buildInventory();
+  buildUsage();
+  buildInbound();
+  buildRawSelects();
+  renderRawTable();
+}
+
+// ── Overview ──
+function buildOverview() {
+  const { rows: invRows } = getRows('inventory');
+  const { rows: usgRows } = getRows('usage');
+  const { rows: inbRows } = getRows('inbound');
+
+  document.getElementById('kpi-items').textContent = invRows.length || '—';
+  document.getElementById('kpi-usage').textContent = usgRows.length || '—';
+  document.getElementById('kpi-inbound').textContent = inbRows.length || '—';
+  document.getElementById('kpi-files').textContent = Object.keys(S.files).length;
+  document.getElementById('kpi-files-sub').textContent = Object.values(S.files).map(f => {
+    const k = Object.keys(S.files).find(k => S.files[k] === f);
+    return TYPE_MAP[k] || k;
+  }).join(' · ');
+
+  const fileNames = Object.values(S.files).map(f => f.name.replace(/\..+$/, '')).join(' | ');
+  document.getElementById('hdrSubtitle').textContent = fileNames || '—';
+
+  // Usage trend
+  if (usgRows.length) {
+    const { headers: usgH } = getRows('usage');
+    const dateIdx = findCol(usgH, '日期');
+    const months = {};
+    usgRows.forEach(r => {
+      const mk = monthKey(r[dateIdx] || '');
+      if (mk) months[mk] = (months[mk] || 0) + 1;
+    });
+    const sorted = Object.keys(months).sort();
+    makeLineChart('usageTrendChart', sorted.map(m => m.slice(2)), sorted.map(m => months[m]), '#4f9eff');
+    document.getElementById('usageTrendMeta').textContent = `共 ${sorted.length} 个月`;
+
+    // Dept chart
+    const deptIdx = findCol(usgH, '领用部门', '部门');
+    if (deptIdx >= 0) {
+      const dg = groupBy(colVals(usgRows, deptIdx));
+      const sorted2 = Object.entries(dg).sort((a,b) => b[1]-a[1]).slice(0,6);
+      makeDoughnutChart('deptChart', sorted2.map(x=>x[0]), sorted2.map(x=>x[1]));
+      document.getElementById('deptMeta').textContent = `${sorted2.length} 个部门`;
+    }
+  }
+
+  // Inbound trend
+  if (inbRows.length) {
+    const { headers: inbH } = getRows('inbound');
+    const dateIdx = findCol(inbH, '日期');
+    const months = {};
+    inbRows.forEach(r => {
+      const mk = monthKey(r[dateIdx] || '');
+      if (mk) months[mk] = (months[mk] || 0) + 1;
+    });
+    const sorted = Object.keys(months).sort();
+    makeLineChart('inboundTrendChart', sorted.map(m => m.slice(2)), sorted.map(m => months[m]), '#36d9a0');
+    document.getElementById('inboundTrendMeta').textContent = `共 ${sorted.length} 个月`;
+
+    // Supplier chart
+    const supIdx = findCol(inbH, '供应商');
+    if (supIdx >= 0) {
+      const sg = groupBy(colVals(inbRows, supIdx).filter(s => s && s !== 'NaN'));
+      const sorted2 = Object.entries(sg).sort((a,b) => b[1]-a[1]).slice(0,8);
+      makeDoughnutChart('supplierChart', sorted2.map(x=>x[0]), sorted2.map(x=>x[1]));
+      document.getElementById('supplierMeta').textContent = `${sorted2.length} 家供应商`;
+    }
+  }
+}
+
+// ── Inventory ──
+function buildInventory() {
+  const { headers, rows } = getRows('inventory');
+  if (!rows.length) return;
+
+  const nameIdx = findCol(headers, '物料名称', '品名');
+  const qtyIdx  = findCol(headers, '数量', '库存');
+  const unitIdx = findCol(headers, '单位');
+
+  document.getElementById('inv-kpi1').textContent = rows.length;
+
+  let total = 0;
+  rows.forEach(r => { const v = parseFloat(r[qtyIdx] ?? 0); if (!isNaN(v)) total += v; });
+  document.getElementById('inv-kpi2').textContent = total.toLocaleString();
+
+  const units = new Set(colVals(rows, unitIdx).filter(u => u && u !== 'NaN'));
+  document.getElementById('inv-kpi3').textContent = units.size || '—';
+
+  // Bar chart top 15
+  const qMap = {};
+  rows.forEach(r => {
+    const name = String(r[nameIdx] ?? '').trim();
+    const qty = parseFloat(r[qtyIdx] ?? 0) || 0;
+    if (name) qMap[name] = (qMap[name] || 0) + qty;
+  });
+  const top15 = Object.entries(qMap).sort((a,b) => b[1]-a[1]).slice(0,15);
+  makeBarChart('invBarChart', top15.map(x => x[0].slice(0,8)), top15.map(x => x[1]), '#4f9eff', false);
+
+  // Top list
+  renderTopList('invTopList', Object.entries(qMap).sort((a,b)=>b[1]-a[1]).slice(0,10), '#4f9eff');
+
+  // Mini table
+  const dispCols = [nameIdx, findCol(headers,'规格','尺寸','型号'), qtyIdx, unitIdx, findCol(headers,'供应商'), findCol(headers,'备注')].filter(i => i >= 0);
+  const dispH = dispCols.map(i => headers[i]);
+  const dispR = rows.map(r => dispCols.map(i => r[i] ?? ''));
+  const classes = {};
+  dispCols.forEach((ci, pos) => { if (ci === qtyIdx) classes[pos] = 'val-blue mono'; });
+  renderMiniTable('invTableWrap', dispH, dispR, classes);
+}
+
+// ── Usage ──
+function buildUsage() {
+  const { headers, rows } = getRows('usage');
+  if (!rows.length) return;
+
+  const dateIdx = findCol(headers, '日期');
+  const nameIdx = findCol(headers, '物料名称', '品名');
+  const qtyIdx  = findCol(headers, '领用数量', '数量');
+  const deptIdx = findCol(headers, '领用部门', '部门');
+
+  document.getElementById('usg-kpi1').textContent = rows.length;
+  const names = new Set(colVals(rows, nameIdx).filter(Boolean));
+  document.getElementById('usg-kpi2').textContent = names.size;
+  const depts = new Set(colVals(rows, deptIdx).filter(Boolean));
+  document.getElementById('usg-kpi3').textContent = depts.size;
+  const rows2026 = rows.filter(r => String(r[dateIdx] || '').startsWith('2026'));
+  document.getElementById('usg-kpi4').textContent = rows2026.length;
+
+  // Month trend
+  const months = {};
+  rows.forEach(r => {
+    const mk = monthKey(r[dateIdx] || '');
+    const qty = parseFloat(r[qtyIdx] || 1) || 1;
+    if (mk) months[mk] = (months[mk] || 0) + qty;
+  });
+  const sorted = Object.keys(months).sort();
+  makeLineChart('usgMonthChart', sorted.map(m => m.slice(2)), sorted.map(m => months[m]), '#4f9eff');
+
+  // Dept doughnut
+  if (deptIdx >= 0) {
+    const dg = groupBy(colVals(rows, deptIdx).filter(d => d && d !== 'NaN'));
+    const sd = Object.entries(dg).sort((a,b) => b[1]-a[1]).slice(0,8);
+    makeDoughnutChart('usgDeptChart', sd.map(x=>x[0]), sd.map(x=>x[1]));
+  }
+
+  // Top items
+  const itemQty = {};
+  rows.forEach(r => {
+    const name = String(r[nameIdx] ?? '').trim();
+    const qty = parseFloat(r[qtyIdx] || 1) || 1;
+    if (name) itemQty[name] = (itemQty[name] || 0) + qty;
+  });
+  renderTopList('usgTopItems', Object.entries(itemQty).sort((a,b)=>b[1]-a[1]).slice(0,10), '#4f9eff');
+}
+
+// ── Inbound ──
+function buildInbound() {
+  const { headers, rows } = getRows('inbound');
+  if (!rows.length) return;
+
+  const dateIdx  = findCol(headers, '日期');
+  const supIdx   = findCol(headers, '供应商');
+  const orderIdx = findCol(headers, '主订单');
+  const nameIdx  = findCol(headers, '物料名称');
+  const inbIdx   = findCol(headers, '入库数', '入库量');
+
+  document.getElementById('inb-kpi1').textContent = rows.length;
+  const sups = new Set(colVals(rows, supIdx).filter(s => s && s !== 'NaN'));
+  document.getElementById('inb-kpi2').textContent = sups.size;
+  const orders = new Set(colVals(rows, orderIdx).filter(Boolean));
+  document.getElementById('inb-kpi3').textContent = orders.size;
+  const rows2026 = rows.filter(r => String(r[dateIdx] || '').startsWith('2026'));
+  document.getElementById('inb-kpi4').textContent = rows2026.length;
+
+  // Month trend
+  const months = {};
+  rows.forEach(r => {
+    const mk = monthKey(r[dateIdx] || '');
+    const qty = parseFloat(r[inbIdx] || 1) || 1;
+    if (mk) months[mk] = (months[mk] || 0) + qty;
+  });
+  const sorted = Object.keys(months).sort();
+  makeLineChart('inbMonthChart', sorted.map(m => m.slice(2)), sorted.map(m => months[m]), '#36d9a0');
+
+  // Supplier doughnut
+  if (supIdx >= 0) {
+    const sg = groupBy(colVals(rows, supIdx).filter(s => s && s !== 'NaN'));
+    const ss = Object.entries(sg).sort((a,b) => b[1]-a[1]).slice(0,8);
+    makeDoughnutChart('inbSupplierChart', ss.map(x=>x[0]), ss.map(x=>x[1]));
+  }
+
+  // Top items by inbound qty
+  const itemQty = {};
+  rows.forEach(r => {
+    const name = String(r[nameIdx] ?? '').trim();
+    const qty = parseFloat(r[inbIdx] || 1) || 1;
+    if (name) itemQty[name] = (itemQty[name] || 0) + qty;
+  });
+  renderTopList('inbTopItems', Object.entries(itemQty).sort((a,b)=>b[1]-a[1]).slice(0,10), '#36d9a0');
+}
+
+// ── Raw Table ──
+function buildRawSelects() {
+  const sel = document.getElementById('rawFileSelect');
+  sel.innerHTML = '<option value="">— 选择数据集 —</option>';
+  Object.entries(S.files).forEach(([type, f]) => {
+    const opt = document.createElement('option');
+    opt.value = type;
+    opt.textContent = `${TYPE_MAP[type] || type} · ${f.name}`;
+    sel.appendChild(opt);
+  });
+  if (Object.keys(S.files).length > 0) {
+    sel.value = Object.keys(S.files)[0];
+    updateSheetSelect();
+  }
+}
+
+function updateSheetSelect() {
+  const type = document.getElementById('rawFileSelect').value;
+  const sel2 = document.getElementById('rawSheetSelect');
+  sel2.innerHTML = '';
+  if (!type || !S.files[type]) return;
+  Object.keys(S.files[type].sheets).forEach(sn => {
+    const opt = document.createElement('option');
+    opt.value = sn; opt.textContent = sn;
+    sel2.appendChild(opt);
+  });
+}
+document.getElementById('rawFileSelect').addEventListener('change', () => { updateSheetSelect(); renderRawTable(); });
+
+let rawSortCol = -1, rawSortDir = 1, rawHeaders = [], rawDataRows = [];
+
+function renderRawTable() {
+  const type = document.getElementById('rawFileSelect').value;
+  const sheetName = document.getElementById('rawSheetSelect').value;
+  const q = document.getElementById('rawSearch').value.trim().toLowerCase();
+
+  if (!type || !S.files[type] || !sheetName || !S.files[type].sheets[sheetName]) {
+    document.getElementById('rawTbody').innerHTML = '<tr><td colspan="20" style="text-align:center;color:var(--dim);padding:40px">请选择数据集</td></tr>';
+    document.getElementById('rawCount').textContent = '—';
+    return;
+  }
+
+  const allRows = S.files[type].sheets[sheetName];
+  let hi = 0;
+  for (let i = 0; i < Math.min(allRows.length, 6); i++) {
+    if ((allRows[i]||[]).filter(c => c && c !== '').length >= 3) { hi = i; break; }
+  }
+  rawHeaders = (allRows[hi] || []).map(h => String(h ?? ''));
+  rawDataRows = allRows.slice(hi + 1).filter(r => (r||[]).some(c => c !== null && c !== '' && c !== undefined));
+
+  let filtered = q ? rawDataRows.filter(r => r.some(c => String(c??'').toLowerCase().includes(q))) : rawDataRows;
+
+  if (rawSortCol >= 0) {
+    filtered = [...filtered].sort((a, b) => {
+      const av = a[rawSortCol] ?? '', bv = b[rawSortCol] ?? '';
+      const an = parseFloat(av), bn = parseFloat(bv);
+      if (!isNaN(an) && !isNaN(bn)) return (an - bn) * rawSortDir;
+      return String(av).localeCompare(String(bv), 'zh') * rawSortDir;
+    });
+  }
+
+  // Render thead
+  document.getElementById('rawThead').innerHTML = `<tr>${rawHeaders.map((h, i) =>
+    `<th onclick="rawSort(${i})">${h} <span style="opacity:0.4;font-size:9px">${rawSortCol===i?(rawSortDir>0?'↑':'↓'):'↕'}</span></th>`
+  ).join('')}</tr>`;
+
+  // Render tbody (cap at 500)
+  document.getElementById('rawTbody').innerHTML = filtered.slice(0, 500).map(row =>
+    `<tr>${rawHeaders.map((_, i) => {
+      const val = row[i] ?? '';
+      const isNum = !isNaN(parseFloat(val)) && val !== '' && !/^\d{4}-\d{2}/.test(String(val));
+      const isDate = /^\d{4}-\d{2}-\d{2}/.test(String(val));
+      return `<td class="${isDate?'date-cell':isNum?'num':''}">${val}</td>`;
+    }).join('')}</tr>`
+  ).join('') || '<tr><td colspan="20" style="text-align:center;color:var(--dim);padding:30px">无匹配数据</td></tr>';
+
+  document.getElementById('rawCount').textContent = `共 ${filtered.length} 条${filtered.length > 500 ? '（显示前500条）' : ''}`;
+  document.getElementById('rawTime').textContent = new Date().toLocaleTimeString('zh-CN');
+}
+
+function rawSort(col) {
+  if (rawSortCol === col) rawSortDir *= -1;
+  else { rawSortCol = col; rawSortDir = 1; }
+  renderRawTable();
+}
+
+function exportCSV() {
+  const type = document.getElementById('rawFileSelect').value;
+  const sn = document.getElementById('rawSheetSelect').value;
+  if (!type || !S.files[type] || !sn) return;
+  const rows = S.files[type].sheets[sn];
+  const csv = rows.map(r => (r||[]).map(c => `"${String(c??'').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob(['\ufeff'+csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${sn}_导出.csv`;
+  a.click();
+}
+</script>
+</body>
+</html>
